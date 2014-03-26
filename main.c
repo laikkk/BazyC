@@ -4,8 +4,10 @@
  * 
  *      Dołączyłem też plik makefile
  *      sposob uruchomienia: make makefile program
- *      nastepnie:              ./program ...
- *      wywolanie gcc -o main main.c -I/usr/include/postgresql -L/usr/lib -lpq
+ *      nastepnie:              ./program nazwa_bazy nazwa_tabeli1 nazwa_tabeli2 .. > strona.html lub
+ *                              ./program nazwa_pliku.csv
+ *      kompilacja z ręki:
+ *      gcc -o main main.c -I/usr/include/postgresql -L/usr/lib -lpq
  * 
  * na innym komputerze mogą wysątpić problemy z plikami bibliotek. Na slajdzie były:
  * -I/usr/include/postgresql -L/usr/local/pgsql/lib -lpq
@@ -20,13 +22,14 @@
 #define CONN_TEXT "host=localhost port=5432 dbname=kamil user=kamil password=1234"
 #define DL_NAZWY_PLIKU 128
 #define DL_ZAPYTANIA 512
+
 // DANE KONFIGURACYJNE 
-char HOST[DL_ZAPYTANIA]="localhost";
-char PORT[DL_ZAPYTANIA]="5432";
-char DBNAME[DL_ZAPYTANIA]="kamil";
-char USER[DL_ZAPYTANIA]="kamil";
-char PASSWORD[DL_ZAPYTANIA]="1234";
-char CONNECTION_STRING[DL_ZAPYTANIA]=""; 
+char HOST[DL_ZAPYTANIA] = "localhost";
+char PORT[DL_ZAPYTANIA] = "5432";
+char DBNAME[DL_ZAPYTANIA] = "kamil";
+char USER[DL_ZAPYTANIA] = "kamil";
+char PASSWORD[DL_ZAPYTANIA] = "1234";
+char CONNECTION_STRING[DL_ZAPYTANIA] = "";
 
 typedef struct
 {
@@ -34,9 +37,11 @@ typedef struct
     int dlugosc_pola;
 } Struktura;
 
-void CreateConnectionString(){//'skleja' stringa do laczenia z baza danych. MUSI być wywolane przed operacjami na bazie
-    sprintf(CONNECTION_STRING,"host=%s port=%s dbname=%s user=%s password=%s",HOST,PORT,DBNAME,USER,PASSWORD);    
+void CreateConnectionString()
+{//'skleja' stringa do laczenia z baza danych. MUSI być wywolane przed operacjami na bazie
+    sprintf(CONNECTION_STRING, "host=%s port=%s dbname=%s user=%s password=%s", HOST, PORT, DBNAME, USER, PASSWORD);
 }
+
 PGconn* ConectToDatebase()
 {
     CreateConnectionString();
@@ -48,11 +53,11 @@ PGconn* ConectToDatebase()
     }
     else
     {
-        printf("nie moglem polaczyc sie do bazy if(argc==2) !\n");
+        printf("nie moglem polaczyc sie do bazy !\n");
         exit(1);
     }
-
 }
+
 int CountColumnt(char* nazwaPliku) // zlicza ilosc kolumn w pliku csv
 {
     FILE *plik;
@@ -63,18 +68,17 @@ int CountColumnt(char* nazwaPliku) // zlicza ilosc kolumn w pliku csv
     }
     char pierwszy[512];
     fgets(pierwszy, 511, plik);
-    int i = 0;
-    int licznik_kolumn = 0;
+    int i = 0, licznik_kolumn = 0;
     while (pierwszy[i]!='\0')
     {
         if (pierwszy[i]==';') licznik_kolumn++;
         i++;
     }
-    if(licznik_kolumn==0){
+    if (licznik_kolumn==0)
+    {
         printf("Prawdopodobnie bledy w pliku lub zero kolumn\n");
-            exit(1);
+        exit(1);
     }
-    //printf("licznik_kolumn = %d\n", licznik_kolumn);
     fclose(plik);
     return licznik_kolumn+1; //+1 bo ostania kolumna w pliku csv nie ma srednika
 
@@ -89,14 +93,13 @@ void prepareCreatestmt(char* nazwaPliku, char* nazwaTabeli, char* query, Struktu
         exit(1);
     }
     char pierwszy[DL_ZAPYTANIA], drugi[DL_ZAPYTANIA];
-    fgets(pierwszy, DL_ZAPYTANIA, plik);
+    fgets(pierwszy, DL_ZAPYTANIA, plik); //Pobieramy pierwsza linijke z pliku.csv
     strcpy(drugi, pierwszy);
     char *result = NULL;
     result = strtok(pierwszy, ";");
     int licznikKolumn = 0;
     while (result!=NULL)
     {
-        // printf("result is \"%s\"\n", result);
         struktura[licznikKolumn].dlugosc_pola = 30;
         strcpy(struktura[licznikKolumn].nazwa_kolumny, result);
         result = strtok(NULL, ";");
@@ -105,14 +108,11 @@ void prepareCreatestmt(char* nazwaPliku, char* nazwaTabeli, char* query, Struktu
     if (licznikKolumn>0)
     {
         char Kolumny[licznikKolumn][DL_ZAPYTANIA];
-        //printf("%s\n", drugi);
         result = strtok(drugi, ";");
         licznikKolumn = 0;
         while (result!=NULL)
         {
-            //  printf("r \"%s\"\n", result);
             strcpy(Kolumny[licznikKolumn], result);
-            //   printf("Kolumny[%d] = %s\n", licznikKolumn,Kolumny[licznikKolumn]);
             result = strtok(NULL, ";");
             licznikKolumn++;
         }
@@ -123,9 +123,7 @@ void prepareCreatestmt(char* nazwaPliku, char* nazwaTabeli, char* query, Struktu
         {
             strcat(query, Kolumny[x]);
             if (x==0)
-            {
                 strcat(query, " VARCHAR(30) UNIQUE,");
-            }
             else if (x+1==licznikKolumn)
                 strcat(query, " VARCHAR(30) );");
             else strcat(query, " VARCHAR(30), ");
@@ -135,18 +133,14 @@ void prepareCreatestmt(char* nazwaPliku, char* nazwaTabeli, char* query, Struktu
             printf("Prawdopodobnie bledy w pliku lub zero kolumn\n");
             exit(1);
         }
-       // printf("query = %s\n",query);
     }
 }
-
-
 
 int IfTableExist(char* nazwaTabeli, PGconn* conn)//sprawdza czy Tabela istnieje w bazie
 {
     char query[DL_ZAPYTANIA];
     sprintf(query, "SELECT 1 FROM pg_tables WHERE tablename ='%s'", nazwaTabeli);
     PGresult *result = PQexec(conn, query);
-    printf("ilosc wierszy (IfTableExist(%s)) = %d \n", nazwaTabeli,PQntuples(result));
     return PQntuples(result);
 }
 
@@ -176,16 +170,15 @@ void ChangeSizeofColumn(Struktura *struktura, int pozycja, char* nazwaTabeli, PG
     sprintf(query, "ALTER TABLE %s ALTER COLUMN %s TYPE varchar(%d);", nazwaTabeli, struktura[pozycja].nazwa_kolumny, struktura[pozycja].dlugosc_pola += 30);
     PGresult *result = PQexec(myconnection, query);
     Msg("Zmiana dlugosci tabeli", result);
+    PQclear(result);
 }
 
 void InsertRow(PGconn* myconnection, char* NazwaPliku, FILE* plik, char* NazwaTabeli, Struktura *struktura)
 {
     char Rekordy[CountColumnt(NazwaPliku)][DL_NAZWY_PLIKU];
-
     char slowo[DL_NAZWY_PLIKU];
-    int c, i;
-    int firstTime = 0, doinsert = 0;
-    while ((c = (int)fgets(slowo, 99, plik))!=0) //bierze 99znakow  dopisuje '\0' na koncu i zapisuje do zmiennej slowo
+    int c, i, firstTime = 0, doinsert = 0;
+    while ((c = (int)fgets(slowo, DL_NAZWY_PLIKU, plik))!=0) //bierze 99znakow  dopisuje '\0' na koncu i zapisuje do zmiennej slowo
     {
         int x = 0, k = 0, j = 0, n, kolumna = 0;
         do
@@ -197,18 +190,14 @@ void InsertRow(PGconn* myconnection, char* NazwaPliku, FILE* plik, char* NazwaTa
             }
             char wyraz[100] = "";
             while (slowo[x]!='\0'&&slowo[x]!=';') x++;
-            //printf("x = %d\n",x);
             if (slowo[x]=='\0') break;
-
             j = k;
             k = 0;
             n = 0;
             for (k = j; k<x; k++)
                 wyraz[n++] = slowo[k];
-
             wyraz[k] = '\0';
             strcpy(Rekordy[kolumna++], wyraz);
-            //printf("|%s|\n", wyraz);
             x += 2; //omijamy sredniki
             k++; //omijamy sredniki
         }
@@ -226,118 +215,89 @@ void InsertRow(PGconn* myconnection, char* NazwaPliku, FILE* plik, char* NazwaTa
                     ChangeSizeofColumn(struktura, i, NazwaTabeli, myconnection);
                 strcat(prepare, Rekordy[i]);
                 strcat(prepare, "\'");
-
                 strcat(insertQuery, prepare);
                 if (i+1!=kolumna)strcat(insertQuery, ", ");
-                // printf(" %s ", Rekordy[i]);
             }
             strcat(insertQuery, "); ");
-            printf("%s\n", insertQuery);
             PGresult *result = PQexec(myconnection, insertQuery);
             Msg("Dodałem rekord", result);
             PQclear(result);
-
         }
-
     }
 }
 
-void newInsert(PGconn* myconnection, char* NazwaPliku, FILE* plik, char* NazwaTabeli, Struktura *struktura)
+void newInsert(PGconn* myconnection, char* NazwaPliku, FILE* plik, char* NazwaTabeli, Struktura *struktura) //dodaje rekordy do bazy
 {
-
     char pierwszy[DL_ZAPYTANIA];
-    fgets(pierwszy, DL_ZAPYTANIA, plik);//ompijamy tym pierwsza linijke
- 
-    int licznikKolumn,i, c, iloscColumn=CountColumnt(NazwaPliku);
+    fgets(pierwszy, DL_ZAPYTANIA, plik); //omijamy tym pierwsza linijke
+
+    int licznikKolumn, i, c, iloscColumn = CountColumnt(NazwaPliku);
     while ((c = (int)fgets(pierwszy, DL_ZAPYTANIA, plik))!=0)
-    {   
+    {
         licznikKolumn = 0;
         char *result = NULL;
         result = strtok(pierwszy, ";");
         char Kolumny[iloscColumn][DL_NAZWY_PLIKU];
         while (result!=NULL)
         {
-           // printf("r= \"%s\"\n", result);
-            strcpy(Kolumny[licznikKolumn], result);      
+            strcpy(Kolumny[licznikKolumn], result);
             result = strtok(NULL, ";");
             licznikKolumn++;
         }
         char insertQuery[1000] = "";
-            sprintf(insertQuery, "INSERT INTO %s VALUES (", NazwaTabeli);
-            for (i = 0; i<licznikKolumn; i++)
-            {
-                char prepare[100] = "\'";
-                if (strlen(Kolumny[i])>struktura[i].dlugosc_pola)
-                    ChangeSizeofColumn(struktura, i, NazwaTabeli, myconnection);
-                strcat(prepare, Kolumny[i]);
-                strcat(prepare, "\'");
-
-                strcat(insertQuery, prepare);
-                if (i+1!=licznikKolumn)strcat(insertQuery, ", ");
-                // printf(" %s ", Rekordy[i]);
-            }
-            strcat(insertQuery, "); ");
-           // printf("%s\n", insertQuery);
-            PGresult *resultt = PQexec(myconnection, insertQuery);
-            Msg("Dodałem rekord", resultt);
-             PQclear(resultt);
+        sprintf(insertQuery, "INSERT INTO %s VALUES (", NazwaTabeli);
+        for (i = 0; i<licznikKolumn; i++)
+        {
+            char prepare[100] = "\'";
+            if (strlen(Kolumny[i])>struktura[i].dlugosc_pola)
+                ChangeSizeofColumn(struktura, i, NazwaTabeli, myconnection);
+            strcat(prepare, Kolumny[i]);
+            strcat(prepare, "\'");
+            strcat(insertQuery, prepare);
+            if (i+1!=licznikKolumn)strcat(insertQuery, ", ");
+        }
+        strcat(insertQuery, "); ");
+        PGresult *resultt = PQexec(myconnection, insertQuery);
+        Msg("Dodałem rekord", resultt);
+        PQclear(resultt);
     }
 }
 
-void Select(PGconn* myconnection,char* NazwaBazy, char* Nazwatabeli)
+void Select(PGconn* myconnection, char* Nazwatabeli)
 {
-    //char Conntext[DL_ZAPYTANIA] = "";
-    strcpy(DBNAME,NazwaBazy);
-    
-   // sprintf(Conntext, "host=localhost port=5432 dbname=%s user=kamil password=1234", NazwaBazy);
-    //PGconn *myconnection = PQconnectdb(Conntext);
-    
-    if (PQstatus(myconnection)!=CONNECTION_OK)
+    char select[DL_ZAPYTANIA] = "";
+    sprintf(select, "SELECT * FROM %s", Nazwatabeli);
+    PGresult *result = PQexec(myconnection, select);
+    ExecStatusType status = PQresultStatus(result);
+    if (status==PGRES_TUPLES_OK)
     {
-        printf("NIE moglem polaczyc sie do bazy %s !\n", NazwaBazy);
-    }
-    else
-    {
-        char select[DL_ZAPYTANIA] = "";
-        sprintf(select, "SELECT * FROM %s", Nazwatabeli);
-        PGresult *result = PQexec(myconnection, select);
-        ExecStatusType status = PQresultStatus(result);
-        if (status==PGRES_TUPLES_OK)
+        printf("<div class=\"Tablestyle\"><table><caption>%s</caption>", Nazwatabeli);
+        int iloscKolumn = PQnfields(result), iloscWierszy = PQntuples(result), i, j;
+        printf("<tr>");
+        for (j = 0; j<iloscKolumn; j++)
+            printf("<td>%s</td>", PQfname(result, j));
+        printf("</tr>");
+        for (i = 0; i<iloscWierszy; i++)
         {
-            printf("<div class=\"Tablestyle\"><table><caption>%s</caption>", Nazwatabeli);
-            int iloscKolumn = PQnfields(result),
-                    iloscWierszy = PQntuples(result), i, j;
-
             printf("<tr>");
             for (j = 0; j<iloscKolumn; j++)
-                printf("<td>%s</td>", PQfname(result, j));
+                printf("<td>%s</td>", PQgetvalue(result, i, j));
             printf("</tr>");
-            for (i = 0; i<iloscWierszy; i++)
-            {
-                printf("<tr>");
-                for (j = 0; j<iloscKolumn; j++)
-                {
-                    printf("<td>%s</td>", PQgetvalue(result, i, j));
-                }
-                printf("</tr>");
-            }
-            printf("</table></div>");
         }
-         PQclear(result);
+        printf("</table></div>");
     }
-   
+    PQclear(result);
 }
 
 int main(int argc, char** argv)
 {
     if (argc==2)
     {
-        //dodajemy do bazy;
+        //dodajemy tabele do bazy;
         PGconn *myconnection = ConectToDatebase();
         char nazwa[DL_NAZWY_PLIKU];
         char *format;
-        int i, iloscKolumn = CountColumnt(argv[1]);
-        //printf("ilosc kolumn = %d\n", iloscKolumn);
+        int iloscKolumn = CountColumnt(argv[1]);
         FILE *plik;
         Struktura Struk[iloscKolumn];
 
@@ -364,22 +324,23 @@ int main(int argc, char** argv)
         Msg("CREATE TABLE", result);
         PQclear(result);
 
-/*
-        for (i = 0; i<iloscKolumn; i++)
-            printf("\t%s (%d)\n", Struk[i].nazwa_kolumny, Struk[i].dlugosc_pola);
-*/
+        /*
+         int i;
+                for (i = 0; i<iloscKolumn; i++)
+                    printf("\t%s (%d)\n", Struk[i].nazwa_kolumny, Struk[i].dlugosc_pola);
+         */
 
         newInsert(myconnection, argv[1], plik, nazwa, Struk);
-
+        fclose(plik);
         PQfinish(myconnection);
     }
     else if (argc>2)
     {
         //robimy plik index.html
-        //PGconn *myconnection = ConectToDatebase();
+        strcpy(DBNAME, argv[1]);
         PGconn *myconnection = ConectToDatebase();
-        
-       // <editor-fold defaultstate="collapsed" desc="Naglowek i style pliku html">
+
+        // <editor-fold defaultstate="collapsed" desc="Naglowek i style pliku html">
         printf("<!DOCTYPE HTML> \
 <html>  \
 <head>  \
@@ -388,7 +349,7 @@ int main(int argc, char** argv)
  \
  <meta name= \"author\" content= \"Kamil Zieliński\"/> \
  <meta name= \"Robots\" content= \"all\" /> \
- <title>TYTUŁ STRONY</title> \
+ <title>APLIKACJE BAZODANOWE - KAMIL ZIELIŃSKI</title> \
 \
 <style type=\"text/css\">\
      body{");
@@ -511,21 +472,18 @@ margin:auto;\
   </style>\
 <![endif]-->\
 </head>\
-<body class=\"griadient\">"); 
+<body class=\"griadient\">");
         // </editor-fold>
 
- 
         int i = 0;
         for (i = 2; i<argc; i++)
-            Select(myconnection,argv[1], argv[i]);
+            Select(myconnection, argv[i]);
 
         printf("</body></html>");
-         PQfinish(myconnection);
+        PQfinish(myconnection);
     }
     else
         printf("Za mało argumentow wywolania\nPrzyklad wywolania\n./nazwa_prog nazwa_pliku.csv\n");
-
-
 
     return (EXIT_SUCCESS);
 }
